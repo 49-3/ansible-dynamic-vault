@@ -1,6 +1,7 @@
 # 🔐 Ansible Dynamic Vault
 
 ⭐ **Recruiter? Start here → [RECRUITER_README.md](RECRUITER_README.md)**
+
 📚 **Detailed usage examples → [README_DETAILED.md](README_DETAILED.md)**
 
 Production-grade secret lifecycle automation for Ansible Vault.

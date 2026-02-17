@@ -1,0 +1,11 @@
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: {{ CERT_PATH }}
+        keyFile: {{ KEY_PATH }}
+  certificates:
+    - certFile: {{ CERT_PATH }}
+      keyFile: {{ KEY_PATH }}
+      stores:
+        - default

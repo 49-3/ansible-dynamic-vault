@@ -1,0 +1,13 @@
+galaxy_info:
+  author: David Ribeiro
+  description: Traefik reverse proxy deployment with Kubernetes & vault integration example
+  company: 42Mulhouse.fr
+  license: MIT
+  min_ansible_version: 2.10
+  galaxy_tags:
+    - traefik
+    - reverse-proxy
+    - kubernetes
+    - vault
+
+dependencies: []

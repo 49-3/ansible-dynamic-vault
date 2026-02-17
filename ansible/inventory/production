@@ -1,0 +1,12 @@
+[alls]
+traefik-back ansible_host=xxx.xxx.xxx.xxx
+traefik-front ansible_host=xxx.xxx.xxx.xxx
+traefik-staff ansible_host=xxx.xxx.xxx.xxx
+traefik-stud ansible_host=xxx.xxx.xxx.xxx
+minio ansible_host=xxx.xxx.xxx.xxx
+
+[traefiks]
+traefik-staff ansible_host=xxx.xxx.xxx.xxx traefik_cluster=admin@staff traefik_url="https://xxx.xxx.xxx.xxx:6443"
+traefik-back ansible_host=xxx.xxx.xxx.xxx traefik_cluster=admin@back traefik_url="https://xxx.xxx.xxx.xxx:6443"
+traefik-stud ansible_host=xxx.xxx.xxx.xxx traefik_cluster=admin@stud traefik_url="https://xxx.xxx.xxx.xxx:6443"
+traefik-front ansible_host=xxx.xxx.xxx.xxx traefik_cluster=admin@front traefik_url="https://xxx.xxx.xxx.xxx:6443"

@@ -1,0 +1,10 @@
+---
+# Configuration spécifique pour traefik-staff
+# Override les namespaces par défaut si besoin
+traefik_namespaces:
+  - cattle-system
+  - kube-system
+  - argocd
+  - longhorn-system
+  - wp-test
+  - mywp

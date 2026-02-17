@@ -1,0 +1,21 @@
+---
+namespace: ansible_vault_dynamic
+name: vault_loader
+version: 1.0.0
+
+galaxy_info:
+  author: David Ribeiro
+  description: Student
+  company: 42Mulhouse.fr
+  license: MIT
+  min_ansible_version: "2.10"
+  tags:
+    - security
+    - vault
+    - secrets
+    - encryption
+
+repository: "https://github.com/daribeir/ansible-vault-dynamic-secrets"
+documentation: "https://github.com/daribeir/ansible-vault-dynamic-secrets#vault-loader"
+
+dependencies: []

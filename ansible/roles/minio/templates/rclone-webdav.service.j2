@@ -1,0 +1,12 @@
+[Unit]
+Description=Rclone Serve WebDAV clonezilla bucket
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/rclone serve webdav clonezilla:clonezilla --addr :8080 --user {{ minio_clonezilla }} --pass {{ vault_data.vault_minio_clonezilla_password }} --config /root/.config/rclone/rclone.conf
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target

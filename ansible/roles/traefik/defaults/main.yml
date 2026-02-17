@@ -1,0 +1,44 @@
+---
+ansible_python_interpreter: "/usr/bin/python3.12"
+
+SYSTEM_USER: "ansible"
+
+traefik_version: "v3.5.2"
+network_interface: "eth0"
+acme_email: "XXXXX@42mulhouse.fr"
+DOMAINNAME: "42mulhouse.fr"
+CLOUDFLARE_EMAIL: "XXXXX@42mulhouse.fr"
+LOCAL_IPS: "xxx.xxx.xxx.xxx/32,xxx.xxx.xxx.xxx/16,xxx.xxx.xxx.xxx/16,xxx.xxx.xxx.xxx/16"
+
+ovh_email: "XXXXX@42mulhouse.fr"
+
+CERT_PATH: "/etc/traefik/42mulhouse.fr.crt"
+KEY_PATH: "/etc/traefik/42mulhouse.fr.key"
+
+maxRequestBodyBytes: 1048576000 # 1To to pull on harbor
+maxResponseBodyBytes: 1048576000
+
+mulhouse_url: "http://xxx.xxx.xxx.xxx"
+mulhouse_port: "80"
+
+minio_url: "http://xxx.xxx.xxx.xxx"
+minio_port: "9092"
+
+minio_api_url: "http://xxx.xxx.xxx.xxx"
+minio_api_port: "9091"
+
+daribeir_url: "https://xxx.xxx.xxx.xxx"
+daribeir_port: "8444"
+
+# Namespaces Kubernetes par défaut
+traefik_namespaces:
+  - kube-system
+  - longhorn-system
+  - argocd
+
+# Let's Encrypt HTTP challenge resolver defaults (for sub-subdomains like s3.minio.42mulhouse.fr)
+letsencrypt_email: "XXXXX@42mulhouse.fr"
+letsencrypt_storage: "/etc/traefik/acme_letsencrypt_http.json"
+letsencrypt_entrypoint: "web"
+ovh_storage: "/etc/traefik/acme-ovh-dns.json"
+acme_ca_server: "https://acme-v02.api.letsencrypt.org/directory"

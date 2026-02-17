@@ -1,0 +1,12 @@
+#SPDX-License-Identifier: MIT-0
+---
+# handlers file for minio
+- name: Reload minio systemd
+  systemd:
+    name: minio
+    daemon_reload: true
+
+- name: Restart minio
+  service:
+    name: minio
+    state: restarted

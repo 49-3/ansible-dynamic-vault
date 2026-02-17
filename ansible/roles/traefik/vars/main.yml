@@ -1,0 +1,7 @@
+---
+ansible_python_interpreter: /usr/bin/python3
+acme_email: "admin@42mulhouse.fr"
+DOMAINNAME: "42mulhouse.fr"
+CLOUDFLARE_EMAIL: "admin@42mulhouse.fr"
+LOCAL_IPS: "127.0.0.1/32,xxx.xxx.xxx.xxx/16,xxx.xxx.xxx.xxx/16,xxx.xxx.xxx.xxx/16"
+cf_dns_api_token: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

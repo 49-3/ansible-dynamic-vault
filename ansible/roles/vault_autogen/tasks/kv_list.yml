@@ -1,0 +1,91 @@
+# ansible/roles/vault_autogen/tasks/kv_list.yml
+# Attend 'spec' :
+#  - spec.var
+#  - spec['keys']
+#  - spec.value { generate|default, length, chars }
+#  - spec.override (ou spec.overide) -> force (re)génération pour les clés déclarées
+
+- name: Ensure list exists for {{ spec.var }}
+  set_fact:
+    vault_data: "{{ vault_data | combine({ spec.var: (vault_data[spec.var] | default([])) }) }}"
+  no_log: true
+
+- name: Compute keys & flags for {{ spec.var }}
+  set_fact:
+    _existing_entries: "{{ vault_data[spec.var] | default([]) }}"
+    _existing_keys:    "{{ (vault_data[spec.var] | default([])) | map(attribute='key') | list }}"
+    _declared_keys:    "{{ (spec['keys'] | default([])) | list }}"
+    _override_flag:    "{{ (spec.override | default(false)) or (spec.overide | default(false)) }}"
+  no_log: true
+
+# --- Branch A: override -> on régénère pour TOUTES les clés déclarées ---
+- name: Override declared keys in {{ spec.var }}
+  when: _override_flag | bool
+  vars:
+    _length: "{{ (spec.value.length | default(vault_autogen_default_length)) if (spec.value is defined) else vault_autogen_default_length }}"
+    _chars:  "{{ (spec.value.chars  | default(vault_autogen_charset))       if (spec.value is defined) else vault_autogen_charset }}"
+    _use_pw: "{{ spec.value is defined and (spec.value.generate | default('') == 'password') }}"
+  block:
+    - name: Keep non-declared entries
+      set_fact:
+        _others: "{{ _existing_entries | rejectattr('key','in',_declared_keys) | list }}"
+      no_log: true
+
+    - name: Build declared entries (forced)
+      set_fact:
+        _declared_entries: []
+      no_log: true
+
+    - name: Append each declared key with (re)generated/default value
+      vars:
+        _val: >-
+          {{
+            (lookup('password','/dev/null length=' ~ _length ~ ' chars=' ~ _chars)
+             if _use_pw else (spec.value.default | default('')))
+          }}
+      set_fact:
+        _declared_entries: "{{ _declared_entries + [ {'key': _k, 'value': _val } ] }}"
+      loop: "{{ _declared_keys }}"
+      loop_control: { loop_var: _k }
+      no_log: true
+
+    - name: Persist override result
+      set_fact:
+        vault_data: "{{ vault_data | combine({ spec.var: (_others + _declared_entries) }) }}"
+        autogen_added: "{{ (autogen_added | default([])) + [ {'kind':'kv_list','var': spec.var, 'action': 'override', 'keys': _declared_keys} ] }}"
+      no_log: true
+
+# --- Branch B: pas d'override -> ajouter uniquement les clés manquantes ---
+- name: Add missing kv entries for {{ spec.var }}
+  when:
+    - not (_override_flag | bool)
+    - ( _declared_keys | difference(_existing_keys | default([])) ) | length > 0
+  vars:
+    _length: "{{ (spec.value.length | default(vault_autogen_default_length)) if (spec.value is defined) else vault_autogen_default_length }}"
+    _chars:  "{{ (spec.value.chars  | default(vault_autogen_charset))       if (spec.value is defined) else vault_autogen_charset }}"
+    _use_pw: "{{ spec.value is defined and (spec.value.generate | default('') == 'password') }}"
+    _missing: "{{ _declared_keys | difference(_existing_keys | default([])) }}"
+  block:
+    - name: Init work list
+      set_fact:
+        _work: "{{ _existing_entries }}"
+      no_log: true
+
+    - name: Append each missing key
+      vars:
+        _val: >-
+          {{
+            (lookup('password','/dev/null length=' ~ _length ~ ' chars=' ~ _chars)
+             if _use_pw else (spec.value.default | default('')))
+          }}
+      set_fact:
+        _work: "{{ _work + [ {'key': _k, 'value': _val } ] }}"
+      loop: "{{ _missing }}"
+      loop_control: { loop_var: _k }
+      no_log: true
+
+    - name: Persist new list with missing entries added
+      set_fact:
+        vault_data: "{{ vault_data | combine({ spec.var: _work }) }}"
+        autogen_added: "{{ (autogen_added | default([])) + [ {'kind':'kv_list','var': spec.var, 'action':'created_missing', 'keys': _missing} ] }}"
+      no_log: true

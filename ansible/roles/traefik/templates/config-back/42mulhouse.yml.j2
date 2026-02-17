@@ -1,0 +1,41 @@
+---
+tls:
+  stores:
+    default: {}
+
+  certificates:
+    - certFile: {{ CERT_PATH }}
+      keyFile:  {{ KEY_PATH }}
+      stores:
+        - default
+
+http:
+  middlewares:
+    redirect-to-www:
+      redirectRegex:
+        regex: "^https?://42mulhouse\\.fr(.*)"
+        replacement: "https://www.42mulhouse.fr$1"
+        permanent: true
+
+  routers:
+    # Sert le site sur www
+    mulhouse-www:
+      rule: "Host(`www.42mulhouse.fr`)"
+      entryPoints: ["websecure"]
+      service: mulhouse
+      tls: {}
+
+    # Redirige l’apex vers www
+    mulhouse-apex-redirect:
+      rule: "Host(`42mulhouse.fr`)"
+      entryPoints: ["websecure"]
+      middlewares:
+        - redirect-to-www
+      service: "noop@internal"
+      tls: {}
+
+  services:
+    mulhouse:
+      loadBalancer:
+        servers:
+          - url: "{{ mulhouse_url }}:{{ mulhouse_port }}"

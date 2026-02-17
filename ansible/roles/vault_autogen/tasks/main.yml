@@ -1,0 +1,70 @@
+# ansible/roles/vault_autogen/tasks/main.yml
+
+# 0) Contexte autogen (toujours initialiser avant d'append)
+- name: Init autogen context
+  set_fact:
+    vault_data: "{{ vault_data | default({}) }}"
+    autogen_added: "{{ autogen_added | default([]) }}"
+  changed_when: false
+  no_log: true
+
+# ---------------------- scalar ----------------------
+# 1) Crée la clé si manquante (n'écrase pas l'existant)
+- name: Ensure scalar keys (create if missing)
+  vars:
+    _length: "{{ item.length | default(vault_autogen_default_length) }}"
+    _chars:  "{{ item.chars  | default(vault_autogen_charset) }}"
+    _value: >-
+      {{
+        ( item.default
+          if (item.default is defined)
+          else
+          ( lookup('password', '/dev/null length=' ~ _length ~ ' chars=' ~ _chars)
+            if (item.generate|default('') == 'password') else omit )
+        )
+      }}
+  when:
+    - (item.kind | default('scalar')) == 'scalar'
+    - (vault_data[item.path] is not defined) or (vault_data[item.path] | string == 'not_initialised')
+  set_fact:
+    vault_data: "{{ vault_data | combine({ item.path: _value }) }}"
+    autogen_added: "{{ (autogen_added | default([])) + [ {'kind':'scalar','path':item.path,'action':'created'} ] }}"
+  loop: "{{ vault_autogen_spec }}"
+  no_log: true
+
+# 2) Override (force) si demandé : écrase même si la clé existe
+- name: Override scalar keys when requested (force)
+  vars:
+    _override: "{{ (item.override | default(false)) or (item.overide | default(false)) }}"
+    _length:   "{{ item.length | default(vault_autogen_default_length) }}"
+    _chars:    "{{ item.chars  | default(vault_autogen_charset) }}"
+    _value: >-
+      {{
+        ( item.default
+          if (item.default is defined)
+          else
+          ( lookup('password', '/dev/null length=' ~ _length ~ ' chars=' ~ _chars)
+            if (item.generate|default('') == 'password') else omit )
+        )
+      }}
+  when:
+    - (item.kind | default('scalar')) == 'scalar'
+    - _override | bool
+  set_fact:
+    vault_data: "{{ vault_data | combine({ item.path: _value }) }}"
+    autogen_added: "{{ (autogen_added | default([])) + [ {'kind':'scalar','path':item.path,'action':'overridden'} ] }}"
+  loop: "{{ vault_autogen_spec }}"
+  no_log: true
+
+# ---------------------- kv_list ----------------------
+- name: Autogen kv_list specs
+  include_tasks: kv_list.yml
+  loop: "{{ vault_autogen_spec | selectattr('kind','defined') | selectattr('kind','equalto','kv_list') | list }}"
+  loop_control:
+    loop_var: spec
+
+# ---------------------- résumé ----------------------
+- name: Autogen summary (non-secret)
+  debug:
+    var: autogen_added
+  when: autogen_added | length > 0

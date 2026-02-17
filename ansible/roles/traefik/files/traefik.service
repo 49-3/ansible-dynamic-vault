@@ -1,0 +1,13 @@
+[Unit]
+Description=Traefik service
+
+[Service]
+WorkingDirectory=/etc/traefik
+EnvironmentFile=/etc/traefik/.envs
+ReadWriteDirectories=/etc/traefik/plugins-storage
+User=traefik
+Group=traefik
+ExecStart=traefik
+
+[Install]
+WantedBy=multi-user.target

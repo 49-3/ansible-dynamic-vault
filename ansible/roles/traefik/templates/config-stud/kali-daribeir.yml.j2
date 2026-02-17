@@ -1,0 +1,24 @@
+---
+tls:
+  stores:
+    default: {}
+
+  certificates:
+    - certFile: {{ CERT_PATH }}
+      keyFile:  {{ KEY_PATH }}
+      stores:
+        - default
+
+http:
+  routers:
+    to-daribeir:
+      rule: "Host(`daribeir.42mulhouse.fr`)"
+      service: daribeir
+      entryPoints: ["websecure"]
+      tls: {}
+
+  services:
+    daribeir:
+      loadBalancer:
+        servers:
+          - url: {{ daribeir_url }}:{{ daribeir_port }}

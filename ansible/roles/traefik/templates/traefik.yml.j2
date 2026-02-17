@@ -1,0 +1,116 @@
+---
+api:
+  dashboard: true # Optional can be disabled
+  insecure: true # Optional can be disabled
+  debug: false # Optional can be Enabled if needed for troubleshooting
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  metrics:
+    address: ":9101"
+
+  websecure:
+    address: ":443"
+    forwardedHeaders:
+      trustedIPs: {{ LOCAL_IPS }}
+    http:
+      tls: {}
+
+{% if inventory_hostname == 'traefik-front' %}
+  websecure-9092:
+    address: ":9092"
+    forwardedHeaders:
+      trustedIPs: {{ LOCAL_IPS }}
+    http:
+      middlewares:
+        - chain-no-auth@file
+
+certificatesResolvers:
+  dns-ovh:
+    acme:
+      email: "{{ ovh_email }}"          # change si besoin
+      storage: {{ ovh_storage }}        # chmod 600 !
+      dnsChallenge:
+        provider: ovh
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"
+        delayBeforeCheck: 60
+  letsencrypt_http:
+    acme:
+      caServer: "{{ acme_ca_server | default('') }}"
+      email: "{{ letsencrypt_email | default(acme_email | default(ovh_email)) }}"
+      storage: "{{ letsencrypt_storage }}"
+      httpChallenge:
+        # Use the entrypoint that listens on :80 (web)
+        entryPoint: "{{ letsencrypt_entrypoint }}"
+{% endif %}
+
+# <<< ICI on injecte votre certificat wildcard >>>
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: {{ CERT_PATH }}
+        keyFile: {{ KEY_PATH }}
+  certificates:
+    - certFile: {{ CERT_PATH }}
+      keyFile:  {{ KEY_PATH }}
+      stores:
+        - default
+
+
+# Note: a second ACME resolver 'letsencrypt_http' has been added below.
+# Use it in your router configuration (TLS) for sub-subdomains where HTTP
+# challenge is acceptable, for example:
+#   tls:
+#     certResolver: letsencrypt_http
+# This is useful for names like s3.minio.42mulhouse.fr which are not covered by
+# the wildcard but can be validated via HTTP challenge on port 80.
+
+serversTransport:
+  insecureSkipVerify: true
+providers:
+  file:
+    directory: /etc/traefik/config
+    watch: true
+  kubernetesCRD:
+    endpoint: "{{ traefik_url }}"
+    token: "{{ vault_data.vault_traefik_tokens[inventory_hostname] }}"
+    certAuthFilePath: "/etc/traefik/kube-ca.crt"
+    namespaces:
+{% for namespace in traefik_namespaces | default([]) %}
+      - {{ namespace }}
+{% endfor %}
+    labelSelector: "traefik-discover=true"
+    allowExternalNameServices: true
+log:
+  filePath: "/var/log/traefik/traefik.log"
+  level: DEBUG
+accessLog:
+  filePath: "/var/log/traefik/access.log"
+  bufferingSize: 100
+  format: json
+  filters:
+    statusCodes:
+      - "204-299"
+      - "400-499"
+      - "500-599"
+    retryAttempts: true
+    minDuration: "10ms"
+metrics:
+  addInternals: true
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true
+    headerLabels:
+      label: headerKey
+      useragent: User-Agent

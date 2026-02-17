@@ -1,0 +1,22 @@
+#SPDX-License-Identifier: MIT-0
+---
+# Install Minio Server
+- name: Install server
+  include_tasks: 01_install_server.yml
+  when: minio_install_server
+# Install Minio Client
+- name: Install client
+  include_tasks: 02_install_client.yml
+  when: minio_install_client
+# Configure server/cluster
+- name: Configure server
+  include_tasks: 03_configure_server.yml
+  when: minio_url|length > 0 and minio_install_client
+  run_once: true
+# Create buckets (if any are declared)
+- name: Create Minio buckets
+  include_tasks: create_minio_buckets.yml
+  when: minio_buckets is defined and minio_buckets | length > 0
+  run_once: true
+- name: install rclone for clonezilla
+  include_tasks: 05_install_rclone.yml

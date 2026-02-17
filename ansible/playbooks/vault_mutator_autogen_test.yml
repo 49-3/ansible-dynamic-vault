@@ -1,0 +1,31 @@
+# ansible/playbooks/vault_mutator_autogen_test.yml
+- hosts: localhost
+  gather_facts: false
+  vars:
+    vault_autogen_spec:
+      - { kind: scalar, path: "vault_autogen_test1", generate: "password", length: 28 }
+      - { kind: scalar, path: "vault_autogen_test2", default: "fixed-default" }
+      - { kind: scalar, path: "vault_autogen_test3", generate: "password"} # default size 64
+      - { kind: scalar, path: "vault_autogen_test4", generate: "password", override: true }
+      - kind: kv_list
+        var: "vault_autogen_test_kv"
+        keys: ["kappa","lambda","mu"]
+        value: { generate: "password", length: 22 }
+      - kind: kv_list
+        var: "vault_autogen_test_kv"
+        keys: ["epsilon","gama","phi"]
+        value: { generate: "password" }
+        override: true
+
+  roles:
+    - vault_loader
+    - vault_autogen
+    - vault_mutator
+
+  tasks:
+    - name: Show generated entries (non-secret)
+      debug:
+        msg:
+          scalar1: "{{ vault_data.vault_autogen_test1 | default('<absent>') | regex_replace('.*','<hidden>') }}"
+          scalar2: "{{ vault_data.vault_autogen_test2 | default('<absent>') }}"
+          kv_list_keys: "{{ (vault_data.vault_autogen_test_kv | default([])) | map(attribute='key') | list }}"

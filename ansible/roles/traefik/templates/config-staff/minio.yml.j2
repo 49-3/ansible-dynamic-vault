@@ -1,0 +1,24 @@
+---
+tls:
+  stores:
+    default: {}
+
+  certificates:
+    - certFile: {{ CERT_PATH }}
+      keyFile:  {{ KEY_PATH }}
+      stores:
+        - default
+
+http:
+  routers:
+    to-minio:
+      rule: "Host(`minio.42mulhouse.fr`)"
+      service: minio
+      entryPoints: ["websecure"]
+      tls: {}
+
+  services:
+    minio:
+      loadBalancer:
+        servers:
+          - url: {{ minio_url }}:{{ minio_port }}

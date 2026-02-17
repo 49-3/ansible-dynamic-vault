@@ -1,0 +1,10 @@
+acme_email=admin@42mulhouse.fr
+DOMAINNAME=42mulhouse.fr
+CLOUDFLARE_EMAIL=admin@42mulhouse.fr
+LOCAL_IPS=127.0.0.1/32,xxx.xxx.xxx.xxx/16,xxx.xxx.xxx.xxx/16,xxx.xxx.xxx.xxx/16
+{% if inventory_hostname == 'traefik-front' %}
+OVH_ENDPOINT={{ vault_data.ovh_endpoint }}
+OVH_APPLICATION_KEY={{ vault_data.ovh_application_key }}
+OVH_APPLICATION_SECRET={{ vault_data.ovh_application_secret }}
+OVH_CONSUMER_KEY={{ vault_data.ovh_consumer_key }}
+{% endif %}

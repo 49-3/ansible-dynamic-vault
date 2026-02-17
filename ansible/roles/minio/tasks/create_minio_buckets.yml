@@ -1,0 +1,66 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Buckets MinIO (via mc) — idempotent, object lock à la création, versioning
+# Variables attendues :
+#   - mc_command           (déjà défini par tes set_fact, avec ou sans --insecure)
+#   - minio_alias          (ex: "minio")
+#   - minio_buckets:
+#       - name: bucket1
+#         policy: read-write|read-only|private
+#         object_lock: true|false
+#         versioning: true|false     # (optionnel)
+# ─────────────────────────────────────────────────────────────────────────────
+
+- name: Ensure buckets exist (with optional Object Lock at creation)
+  ansible.builtin.command: >
+    {{ mc_command }} mb {{ '--with-lock' if (bucket.object_lock|default(false)) else '' }}
+    --ignore-existing {{ minio_alias }}/{{ bucket.name }}
+  loop: "{{ minio_buckets }}"
+  loop_control:
+    loop_var: bucket
+    label: "{{ bucket.name }}"
+  register: mc_mb
+  changed_when: "'created' in (mc_mb.stdout | lower)"
+  failed_when: false
+
+# Si versioning est défini pour le bucket, on l’applique (enable/suspend)
+- name: Configure bucket versioning (if declared)
+  ansible.builtin.command: >
+    {{ mc_command }} version {{ 'enable' if (bucket.versioning|default(false)) else 'suspend' }}
+    {{ minio_alias }}/{{ bucket.name }}
+  loop: "{{ minio_buckets }}"
+  loop_control:
+    loop_var: bucket
+    label: "{{ bucket.name }}"
+  when: bucket.versioning is defined
+  register: mc_version
+  changed_when: >
+    (mc_version.stdout is search('Enabled versioning successfully|Suspended versioning successfully'))
+  failed_when: false
+
+# Policy anonyme :
+#   - private    -> none
+#   - read-only  -> download
+#   - read-write -> on laisse "none" (pas d'écriture anonyme), RW se gère via policies IAM utilisateur
+- name: Set anonymous policy (public read only when requested)
+  ansible.builtin.command: >
+    {{ mc_command }} anonymous set
+    {{ 'download' if bucket.policy|default('private') == 'read-only' else 'none' }}
+    {{ minio_alias }}/{{ bucket.name }}
+  loop: "{{ minio_buckets }}"
+  loop_control:
+    loop_var: bucket
+    label: "{{ bucket.name }} -> {{ bucket.policy | default('private') }}"
+  register: mc_anon
+  changed_when: false
+  failed_when: false
+
+# (Optionnel) Alerte si object_lock:true mais le bucket existait déjà (on ne peut PAS activer l'OL après coup)
+- name: Warn if object_lock requested but bucket may pre-exist
+  ansible.builtin.debug:
+    msg: >
+      "⚠️  {{ bucket.name }}: object_lock=true demandé. Si le bucket existait déjà
+      sans Object Lock, il faut recréer/migrer pour l'activer (MinIO/S3 limitation)."
+  loop: "{{ minio_buckets }}"
+  loop_control: { loop_var: bucket }
+  when: bucket.object_lock | default(false)
+  changed_when: false

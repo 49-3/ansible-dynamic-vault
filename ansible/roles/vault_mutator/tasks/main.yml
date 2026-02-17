@@ -1,0 +1,119 @@
+# ansible/roles/vault_mutator/tasks/main.yml
+# Persiste 'vault_data' dans {{ vault_file }} de façon atomique et chiffrée
+
+# 0) Calcule la racine du repo (playbook_dir = ansible/playbooks → ../..)
+- name: Compute repo_root (two levels up from playbook_dir)
+  set_fact:
+    _repo_root_guess: "{{ playbook_dir + '/..' + '/..' }}"
+  changed_when: false
+
+- name: Normalize repo_root (realpath)
+  shell: |
+    set -euo pipefail
+    readlink -f "{{ _repo_root_guess }}"
+  args:
+    executable: /bin/bash
+  register: _repo_root
+  changed_when: false
+
+# 1) Récupère les chemins depuis host/group vars, sinon fallback
+- name: Resolve path variables (with global fallback)
+  set_fact:
+    _vault_file_rel: "{{ vault_file | default('ansible/group_vars/all/vault.yml') }}"
+    _vault_password_file_rel: "{{ vault_password_file | default('ansible/.vault-pass') }}"
+  changed_when: false
+
+# 2) Construit les absolus depuis repo_root
+- name: Resolve absolute paths
+  set_fact:
+    repo_root: "{{ _repo_root.stdout }}"
+    vault_file_abs: >-
+      {{ _vault_file_rel if (_vault_file_rel is search('^/'))
+         else (_repo_root.stdout + '/' + _vault_file_rel) }}
+    vault_password_file_abs: >-
+      {{ _vault_password_file_rel if (_vault_password_file_rel is search('^/'))
+         else (_repo_root.stdout + '/' + _vault_password_file_rel) }}
+  changed_when: false
+
+# (optionnel) debug activable
+- debug:
+    msg:
+      - "repo_root={{ repo_root }}"
+      - "vault_file_abs={{ vault_file_abs }}"
+      - "vault_password_file_abs={{ vault_password_file_abs }}"
+  when: lookup('env','DEBUG_VAULT_PATHS') | length > 0
+
+
+# 1) Fichier temporaire clair en tmpfs
+- name: Create tmp clear YAML in /dev/shm
+  ansible.builtin.tempfile:
+    state: file
+    suffix: ".yml"
+    path: "/dev/shm"
+  register: tmpyaml
+
+- name: Resolve map to write (prefer vault_write_map over vault_data)
+  set_fact:
+    _vault_write_map: "{{ vault_write_map | default(vault_data) | default({}, true) }}"
+  no_log: true
+
+- name: Guard — map to write must be a non-empty mapping
+  assert:
+    that:
+      - _vault_write_map is mapping
+      - (_vault_write_map | length) > 0
+    fail_msg: "vault_mutator: nothing to persist (empty or non-mapping)."
+  no_log: true
+
+- name: Write clear YAML to tmpfs
+  copy:
+    dest: "{{ tmpyaml.path }}"
+    mode: "0600"
+    content: "{{ _vault_write_map | to_nice_yaml(indent=2) }}\n"
+  no_log: true
+
+# 2) Chiffrement → fichier temporaire chiffré
+- name: Create tmp encrypted file in /dev/shm
+  ansible.builtin.tempfile:
+    state: file
+    suffix: ".vault"
+    path: "/dev/shm"
+  register: tmpenc
+
+- name: Encrypt to tmpenc
+  ansible.builtin.command: >
+    ansible-vault encrypt {{ tmpyaml.path }}
+    --output {{ tmpenc.path }}
+    --vault-password-file {{ vault_password_file_abs }}
+    --encrypt-vault-id default
+  no_log: false
+
+# 3) Move atomique sous lock
+- name: Ensure lock dir exists
+  ansible.builtin.file:
+    path: "{{ vault_lock_dir | default('/var/lock') }}"
+    state: directory
+    mode: "0755"
+
+- name: Atomic move under lock (user-writable)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    LOCK="{{ vault_lock_dir | default(_default_lock_dir) }}/ansible-vault.lock"
+    exec 9>"$LOCK"
+    flock -x 9
+    install -m 0600 "{{ tmpenc.path }}" "{{ vault_file_abs }}"
+    flock -u 9
+    exec 9>&-
+  args:
+    executable: /bin/bash
+  changed_when: true
+
+# 4) Cleanup tmp
+- name: Cleanup tmp files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ tmpyaml.path }}"
+    - "{{ tmpenc.path }}"
+  no_log: true

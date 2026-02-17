@@ -1,0 +1,162 @@
+#SPDX-License-Identifier: MIT-0
+---
+# Install server, client or both
+ansible_python_interpreter: /usr/bin/python3
+minio_install_server: true
+minio_install_client: true
+
+# minio unix user
+minio_group: minio
+minio_user: minio
+
+# minio data directories
+minio_server_make_datadirs: true
+minio_server_datadirs:
+  - /var/lib/minio
+# Minio server cluster node list.
+minio_server_cluster_nodes: []
+
+# minio bin path
+minio_server_bin: /usr/local/bin/minio
+minio_client_bin: /usr/local/bin/mc
+
+# mino server config dirs
+minio_etc_dir: /etc/minio
+minio_cert_dir: "{{ minio_etc_dir }}/ssl"
+minio_policy_dir: "{{ minio_etc_dir }}/policy"
+# mino server env file
+minio_server_envfile: "{{ minio_etc_dir }}/minio.conf"
+
+# Minio server listen address
+minio_server_port: "9091"
+minio_server_addr: ""
+minio_console_port: "9092"
+
+# Minio site region
+minio_site_region: "eu-west-1"
+
+# Additional environment variables to be set in minio server environment
+minio_server_env_extra: ""
+
+# Additional Minio server CLI options
+minio_server_opts: ""
+
+# Minio server url
+minio_url: "https://minio.42mulhouse.fr"
+minio_api_url: "https://s3.minio.42mulhouse.fr"
+
+# Minio credentials user and password
+minio_root_user: "bocal"
+minio_longhorn_front: "longhorn-front"
+minio_longhorn_back: "longhorn-back"
+minio_longhorn_staff: "longhorn-staff"
+minio_longhorn_stud: "longhorn-stud"
+minio_velero_front: "velero-front"
+minio_velero_back: "velero-back"
+minio_velero_staff: "velero-staff"
+minio_velero_stud: "velero-stud"
+minio_clonezilla: "clonezilla"
+
+# TLS
+minio_enable_tls: false
+minio_key: ""
+minio_cert: ""
+
+minio_buckets:
+  - name: longhorn-front-backups
+    policy: read-write
+    object_lock: false
+  - name: longhorn-back-backups
+    policy: read-write
+    object_lock: false
+  - name: longhorn-staff-backups
+    policy: read-write
+    object_lock: false
+  - name: longhorn-stud-backups
+    policy: read-write
+    object_lock: false
+  - name: velero-front-backups
+    policy: read-write
+    object_lock: false
+  - name: velero-back-backups
+    policy: read-write
+    object_lock: false
+  - name: velero-staff-backups
+    policy: read-write
+    object_lock: false
+  - name: velero-stud-backups
+    policy: read-write
+    object_lock: false
+  - name: clonezilla
+    policy: read-write
+    object_lock: false
+
+minio_users:
+  - name: "{{ minio_longhorn_front }}"
+    password: "{{ vault_data.vault_minio_longhorn_front_password }}"
+    buckets_acl:
+      - name: longhorn-front-backups
+        policy: read-write
+  - name: "{{ minio_longhorn_back }}"
+    password: "{{ vault_data.vault_minio_longhorn_back_password }}"
+    buckets_acl:
+      - name: longhorn-back-backups
+        policy: read-write
+  - name: "{{ minio_longhorn_staff }}"
+    password: "{{ vault_data.vault_minio_longhorn_staff_password }}"
+    buckets_acl:
+      - name: longhorn-staff-backups
+        policy: read-write
+  - name: "{{ minio_longhorn_stud }}"
+    password: "{{ vault_data.vault_minio_longhorn_stud_password }}"
+    buckets_acl:
+      - name: longhorn-stud-backups
+        policy: read-write
+  - name: "{{ minio_velero_front }}"
+    password: "{{ vault_data.vault_minio_velero_front_password }}"
+    buckets_acl:
+      - name: velero-front-backups
+        policy: read-write
+  - name: "{{ minio_velero_back }}"
+    password: "{{ vault_data.vault_minio_velero_back_password }}"
+    buckets_acl:
+      - name: velero-back-backups
+        policy: read-write
+  - name: "{{ minio_velero_staff }}"
+    password: "{{ vault_data.vault_minio_velero_staff_password }}"
+    buckets_acl:
+      - name: velero-staff-backups
+        policy: read-write
+  - name: "{{ minio_velero_stud }}"
+    password: "{{ vault_data.vault_minio_velero_stud_password }}"
+    buckets_acl:
+      - name: velero-stud-backups
+        policy: read-write
+  - name: "{{ minio_clonezilla }}"
+    password: "{{ vault_data.vault_minio_clonezilla_password }}"
+    buckets_acl:
+      - name: clonezilla
+        policy: read-write
+
+# Replication Sites
+replication_sites: []
+# replication_sites:
+#     - name: myminio2
+#       url: ""
+#       admin_user: ""
+#       admin_password: ""
+
+
+# Minio client
+minio_validate_certificate: true
+minio_alias: "bocal"
+
+# Prometheus bearer token
+minio_prometheus_bearer_token: false
+prometheus_bearer_token_output: "{{ minio_etc_dir }}/prometheus_bearer.json"
+
+# Environment variables to use when calling Pip
+minio_pip_environment_vars: {}
+
+# Path to minio virtual environment, created to avoid breakage with system managed python libraries
+minio_venv_path: "/opt/minio-venv"

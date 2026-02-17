@@ -1,0 +1,60 @@
+---
+- name: Deploy MinIO with local vault pipeline (single play)
+  hosts: minio
+  become: true
+  gather_facts: true
+
+  vars:
+     vault_lock_dir: "{{ lookup('env','XDG_RUNTIME_DIR') | default(lookup('env','HOME') ~ '/.cache/ansible/locks', true) }}"
+     vault_autogen_spec:
+      - { kind: scalar, path: "vault_minio_clonezilla_password",      generate: "password" }
+      - { kind: scalar, path: "vault_minio_longhorn_back_password",   generate: "password" }
+      - { kind: scalar, path: "vault_minio_longhorn_front_password",  generate: "password" }
+      - { kind: scalar, path: "vault_minio_longhorn_staff_password",  generate: "password" }
+      - { kind: scalar, path: "vault_minio_longhorn_stud_password",   generate: "password" }
+      - { kind: scalar, path: "vault_minio_root_password",            generate: "password" }
+      - { kind: scalar, path: "vault_minio_velero_back_password",     generate: "password" }
+      - { kind: scalar, path: "vault_minio_velero_front_password",    generate: "password" }
+      - { kind: scalar, path: "vault_minio_velero_staff_password",    generate: "password" }
+      - { kind: scalar, path: "vault_minio_velero_stud_password",     generate: "password" }
+
+  pre_tasks:
+    - name: Prepare vault on controller (load → autogen → mutate)
+      block:
+        - include_role: { name: vault_loader }
+        - include_role: { name: vault_autogen }
+        - include_role: { name: vault_mutator }
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+  roles:
+    - minio
+
+
+  post_tasks:
+    # Exemple: ajout d'une clé en mémoire
+    - name: Add/Update a key in vault_data (in-memory)
+      no_log: true
+      set_fact:
+        vault_data: "{{ (vault_data | default({})) | combine({'vault_minio_api_token': lookup('password', '/dev/null', length=48, chars='ascii_letters,digits')}, recursive=True) }}"
+        vault_data_changed: true
+
+    - name: Persist updated vault_data back to file (controller)
+      when:
+        - vault_data_changed | default(false)
+        - (vault_data | default({})) | length > 0
+      block:
+        - include_role:
+            name: vault_mutator
+          vars:
+            vault_write_map: "{{ hostvars[inventory_hostname].vault_data }}"
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Nettoyer les variables sensibles de la mémoire (optionnel)
+      ansible.builtin.set_fact:
+        vault_data: {}
+      run_once: true
+      no_log: true

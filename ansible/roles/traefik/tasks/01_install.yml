@@ -1,0 +1,243 @@
+---
+- name: Traefik tasks block
+  block:
+    - name: Install Traefik
+      ansible.builtin.unarchive:
+        src: https://github.com/traefik/traefik/releases/download/{{ traefik_version}}/traefik_{{ traefik_version}}_linux_amd64.tar.gz
+        dest: /usr/local/bin
+        remote_src: true
+      notify:
+        - Restart Traefik
+
+    - name: Create Traefik group
+      ansible.builtin.group:
+        name: traefik
+        state: present
+
+    - name: Create Traefik user
+      ansible.builtin.user:
+        name: traefik
+        group: traefik
+        shell: /sbin/nologin
+        state: present
+        create_home: false
+
+    - name: Set port binding capability on Traefik
+      community.general.capabilities:
+        path: /usr/local/bin/traefik
+        capability: cap_net_bind_service+ep
+        state: present
+
+    - name: Create directories
+      shell: |
+        mkdir -p /etc/traefik/config/rules
+        chown -R traefik:traefik /etc/traefik || true
+        # Set safe defaults: directories 0755, regular files 0644.
+        # Sensitive files (ACME storage, kube token) will be tightened explicitly below.
+        find /etc/traefik -type d -exec chmod 0755 {} \; || true
+        find /etc/traefik -type f -exec chmod 0644 {} \; || true
+      args:
+        executable: /bin/bash
+      become: true
+
+    - name: Trouve les fichiers de rules
+      set_fact:
+        found_rules: "{{ lookup('ansible.builtin.fileglob', role_path + '/templates/rules/*.j2', wantlist=True) }}"
+
+    - name: Déployer les rules
+      template:
+        src: "{{ item }}"
+        dest: "/etc/traefik/config/rules/{{ item | basename | regex_replace('\\.j2$', '') }}"
+        owner: "traefik"
+        group: "traefik"
+        mode: '0750'
+      loop: "{{ found_rules }}"
+
+    - name: Trouve les fichiers de config back
+      set_fact:
+        found_configs: "{{ lookup('ansible.builtin.fileglob', role_path + '/templates/config-back/*.j2', wantlist=True) }}"
+      when:
+        - inventory_hostname == "traefik-back"
+
+    - name: Trouve les fichiers de config front
+      set_fact:
+        found_configs: "{{ lookup('ansible.builtin.fileglob', role_path + '/templates/config-front/*.j2', wantlist=True) }}"
+      when:
+        - inventory_hostname == "traefik-front"
+
+    - name: Trouve les fichiers de config staff
+      set_fact:
+        found_configs: "{{ lookup('ansible.builtin.fileglob', role_path + '/templates/config-staff/*.j2', wantlist=True) }}"
+      when:
+        - inventory_hostname == "traefik-staff"
+
+    - name: Trouve les fichiers de config stud
+      set_fact:
+        found_configs: "{{ lookup('ansible.builtin.fileglob', role_path + '/templates/config-stud/*.j2', wantlist=True) }}"
+      when:
+        - inventory_hostname == "traefik-stud"
+
+    - name: Déployer les fichiers de config
+      template:
+        src: "{{ item }}"
+        dest: "/etc/traefik/config/{{ item | basename | regex_replace('\\.j2$', '') }}"
+        owner: "traefik"
+        group: "traefik"
+        mode: '0750'
+      loop: "{{ found_configs }}"
+
+    - name: Copy Auth Credentials
+      ansible.builtin.copy:
+        src: basic_auth_credentials
+        dest: /etc/traefik/
+        mode: "0755"
+      notify:
+        - Restart Traefik
+
+    - name: Check if OVH ACME token exists
+      ansible.builtin.stat:
+        path: /etc/traefik/acme-ovh-dns.json
+      register: acme_ovh_stat
+
+    - name: Check if letsencrypt ACME token exists
+      ansible.builtin.stat:
+        path: /etc/traefik/acme_letsencrypt_http.json
+      register: acme_letsencrypt_stat
+
+    - name: Copy Acme Token for ovh
+      ansible.builtin.copy:
+        src: acme/acme.json
+        dest: /etc/traefik/acme-ovh-dns.json
+        owner: traefik
+        group: traefik
+        mode: "0600"
+      notify:
+        - Restart Traefik
+      when:
+        - inventory_hostname == "traefik-front"
+        - not acme_ovh_stat.stat.exists
+
+    - name: Copy Acme Token for letsencrypt
+      ansible.builtin.copy:
+        src: acme/acme.json
+        dest: /etc/traefik/acme_letsencrypt_http.json
+        owner: traefik
+        group: traefik
+        mode: "0600"
+      notify:
+        - Restart Traefik
+      when:
+        - inventory_hostname == "traefik-front"
+        - not acme_letsencrypt_stat.stat.exists
+
+    - name: Ensure ACME storage files have strict permissions
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: traefik
+        group: traefik
+        mode: '0600'
+      loop:
+        - /etc/traefik/acme_letsencrypt_http.json
+        - /etc/traefik/acme-ovh-dns.json
+      when:
+        - inventory_hostname == "traefik-front"
+      notify:
+        - Restart Traefik
+
+    - name: Copy certificat
+      ansible.builtin.copy:
+        src: 42mulhouse.fr.crt
+        dest: /etc/traefik/
+        owner: traefik
+        group: traefik
+        mode: "0600"
+      notify:
+        - Restart Traefik
+
+    - name: Copy key
+      ansible.builtin.copy:
+        src: 42mulhouse.fr.key
+        dest: /etc/traefik/
+        owner: traefik
+        group: traefik
+        mode: "0600"
+      notify:
+        - Restart Traefik
+
+    - name: Create Traefik config file
+      ansible.builtin.template:
+        src: traefik.yml.j2
+        dest: /etc/traefik/traefik.yml
+        mode: "0644"
+      notify:
+        - Restart Traefik
+
+    - name: Create Traefik config file
+      ansible.builtin.template:
+        src: tls-certificates.yml.j2
+        dest: /etc/traefik/config/tls-certificates.yml
+        mode: "0644"
+      notify:
+        - Restart Traefik
+
+    - name: Copy Kube CA Certificate
+      copy:
+        content: "{{ vault_data.vault_traefik_cas[inventory_hostname] }}"
+        dest: /etc/traefik/kube-ca.crt
+        owner: traefik
+        group: traefik
+        mode: '0644'
+      when:
+        - vault_data.vault_traefik_cas[inventory_hostname] is defined
+        - vault_data.vault_traefik_cas[inventory_hostname] | length > 0
+      notify:
+        - Restart Traefik
+
+    - name: Copy Kube Token
+      copy:
+        content: "{{ vault_data.vault_traefik_tokens[inventory_hostname] }}"
+        dest: /etc/traefik/kube-token
+        owner: traefik
+        group: traefik
+        mode: '0600'
+      when:
+        - vault_data.vault_traefik_tokens[inventory_hostname] is defined
+        - vault_data.vault_traefik_tokens[inventory_hostname] | length > 0
+      notify:
+        - Restart Traefik
+
+    - name: Create Log Folder
+      ansible.builtin.file:
+        path: /var/log/traefik
+        state: directory
+        owner: traefik
+        group: traefik
+        mode: "0744"
+
+    - name: Create Plugin-Folder
+      ansible.builtin.file:
+        path: /etc/traefik/plugins-storage
+        state: directory
+        owner: traefik
+        group: traefik
+        mode: "0744"
+
+    - name: Create .envs file to server
+      ansible.builtin.template:
+        src: .envs.j2
+        dest: /etc/traefik/.envs
+        owner: traefik
+        group: traefik
+        mode: "0744"
+      notify:
+        - Restart Traefik
+
+    - name: Copy systemd service file to server
+      ansible.builtin.copy:
+        src: traefik.service
+        dest: /etc/systemd/system
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Start Traefik

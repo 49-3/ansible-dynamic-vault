@@ -1,0 +1,58 @@
+
+- name: Installer rclone via script officiel
+  shell: "curl https://rclone.org/install.sh | sudo bash"
+  args:
+    creates: /usr/bin/rclone
+
+- name: Créer le dossier de config rclone
+  file:
+    path: /root/.config/rclone
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Générer la configuration rclone
+  template:
+    src: templates/rclone.conf.j2
+    dest: /root/.config/rclone/rclone.conf
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Créer le service systemd rclone mount
+  template:
+    src: templates/rclone-mount.service.j2
+    dest: /etc/systemd/system/rclone-mount.service
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Créer le service systemd rclone webdav
+  template:
+    src: templates/rclone-webdav.service.j2
+    dest: /etc/systemd/system/rclone-webdav.service
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Recharger systemd
+  shell: systemctl daemon-reload
+
+- name: Activer et démarrer rclone mount
+  systemd:
+    name: rclone-mount
+    enabled: yes
+    state: started
+
+- name: Activer et démarrer rclone webdav
+  systemd:
+    name: rclone-webdav
+    enabled: yes
+    state: started
+
+- name: Autoriser le port 8080 sur toutes les IP via UFW
+  ufw:
+    rule: allow
+    port: 8080
+    proto: tcp

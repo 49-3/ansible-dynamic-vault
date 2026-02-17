@@ -1,0 +1,208 @@
+# ansible/roles/vault_loader/tasks/main.yml
+# Charge le vault dans 'vault_data' (auto-init/auto-chiffre si nécessaire)
+
+# 0) Racine du repo (playbook_dir = ansible/playbooks → ../..)
+- name: Compute repo_root (two levels up from playbook_dir)
+  set_fact:
+    _repo_root_guess: "{{ playbook_dir + '/..' + '/..' }}"
+  changed_when: false
+
+- name: Normalize repo_root (realpath)
+  shell: |
+    set -euo pipefail
+    readlink -f "{{ _repo_root_guess }}"
+  args:
+    executable: /bin/bash
+  register: _repo_root
+  changed_when: false
+
+# 1) Récupère chemins depuis group/host vars (fallback si non définis)
+- name: Resolve path variables (with global fallback)
+  set_fact:
+    _vault_file_rel: "{{ vault_file | default('ansible/group_vars/all/vault.yml') }}"
+    _vault_password_file_rel: "{{ vault_password_file | default('ansible/.vault-pass') }}"
+  changed_when: false
+
+# 2) Construit les chemins absolus
+- name: Resolve absolute paths
+  set_fact:
+    repo_root: "{{ _repo_root.stdout }}"
+    vault_file_abs: >-
+      {{ _vault_file_rel if (_vault_file_rel is search('^/'))
+         else (_repo_root.stdout + '/' + _vault_file_rel) }}
+    vault_password_file_abs: >-
+      {{ _vault_password_file_rel if (_vault_password_file_rel is search('^/'))
+         else (_repo_root.stdout + '/' + _vault_password_file_rel) }}
+  changed_when: false
+
+# (debug optionnel)
+- debug:
+    msg:
+      - "repo_root={{ repo_root }}"
+      - "vault_file_abs={{ vault_file_abs }}"
+      - "vault_password_file_abs={{ vault_password_file_abs }}"
+  when: lookup('env','DEBUG_VAULT_PATHS') | length > 0
+
+# 3) Valeur par défaut si non définie (peut être override dans group_vars)
+- name: Defaults (encrypt plaintext by default)
+  set_fact:
+    vault_loader_encrypt_if_plaintext: "{{ vault_loader_encrypt_if_plaintext | default(true) }}"
+  changed_when: false
+
+# 4) S’assurer que le dossier existe (⚠️ utiliser vault_file_abs)
+# défaut: XDG_RUNTIME_DIR sinon ~/.cache/ansible/locks
+- name: Compute default user lock dir
+  ansible.builtin.set_fact:
+    _default_lock_dir: "{{ lookup('env','XDG_RUNTIME_DIR') | default(ansible_env.HOME ~ '/.cache/ansible/locks', true) }}"
+  run_once: true
+
+- name: Ensure lock dir exists (user)
+  ansible.builtin.file:
+    path: "{{ vault_lock_dir | default(_default_lock_dir) }}"
+    state: directory
+    mode: "0700"
+
+# 5) Stat du fichier
+- name: Stat vault file
+  ansible.builtin.stat:
+    path: "{{ vault_file_abs }}"
+  register: vf
+
+# 6) Init → crée {} et chiffre si le fichier manque
+- name: Init empty encrypted vault when file is missing
+  when: not vf.stat.exists
+  block:
+    - name: Create tmp clear YAML in /dev/shm
+      ansible.builtin.tempfile:
+        state: file
+        suffix: ".yml"
+        path: "/dev/shm"
+      register: tmpyaml
+
+    - name: Write {} to tmp clear YAML
+      ansible.builtin.copy:
+        dest: "{{ tmpyaml.path }}"
+        mode: "0600"
+        content: "{}\n"
+      no_log: true
+
+    - name: Create tmp encrypted file in /dev/shm
+      ansible.builtin.tempfile:
+        state: file
+        suffix: ".vault"
+        path: "/dev/shm"
+      register: tmpenc
+
+    - name: Encrypt to tmpenc
+      ansible.builtin.command: >
+        ansible-vault encrypt {{ tmpyaml.path }}
+        --output {{ tmpenc.path }}
+        --vault-password-file {{ vault_password_file_abs }}
+      no_log: true
+
+    - name: Move encrypted vault atomically
+      ansible.builtin.shell: |
+        set -euo pipefail
+        LOCK="{{ vault_lock_dir | default('/var/lock') }}/ansible-vault.lock"
+        exec 9>"$LOCK"
+        flock -x 9
+        install -m 0600 "{{ tmpenc.path }}" "{{ vault_file_abs }}"
+        flock -u 9
+        exec 9>&-
+      args: { executable: /bin/bash }
+
+    - name: Cleanup tmp files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ tmpyaml.path }}"
+        - "{{ tmpenc.path }}"
+      no_log: true
+
+# 7) Détection encrypté/clair
+- name: Detect vault mode (encrypted/plaintext)
+  ansible.builtin.shell: |
+    head -n1 {{ vault_file_abs }} | grep -q '^\$ANSIBLE_VAULT' && echo encrypted || echo plaintext
+  register: vault_mode
+  changed_when: false
+
+# 8) Auto-chiffrage si en clair
+- name: Encrypt plaintext vault in place (configurable)
+  when:
+    - (vault_mode.stdout | trim) == "plaintext"
+    - vault_loader_encrypt_if_plaintext | bool
+  block:
+    - name: Create tmp encrypted file in /dev/shm
+      ansible.builtin.tempfile:
+        state: file
+        suffix: ".vault"
+        path: "/dev/shm"
+      register: tmpenc2
+
+    - name: Encrypt plaintext to tmpenc
+      ansible.builtin.command: >
+        ansible-vault encrypt {{ vault_file_abs }}
+        --output {{ tmpenc2.path }}
+        --vault-password-file {{ vault_password_file_abs }}
+      no_log: true
+
+    - name: Replace plaintext by encrypted atomically
+      ansible.builtin.shell: |
+        set -euo pipefail
+        LOCK="{{ vault_lock_dir | default('/var/lock') }}/ansible-vault.lock"
+        exec 9>"$LOCK"
+        flock -x 9
+        install -m 0600 "{{ tmpenc2.path }}" "{{ vault_file_abs }}"
+        flock -u 9
+        exec 9>&-
+      args: { executable: /bin/bash }
+
+    - name: Cleanup tmpenc
+      ansible.builtin.file:
+        path: "{{ tmpenc2.path }}"
+        state: absent
+      no_log: true
+
+    - name: Set mode to encrypted
+      ansible.builtin.set_fact:
+        vault_mode: { stdout: "encrypted" }
+
+# 9) Lecture & parsing
+- name: Read encrypted vault with ansible-vault view
+  when: (vault_mode.stdout | trim) == "encrypted"
+  ansible.builtin.command: >
+    ansible-vault view {{ vault_file_abs }}
+    --vault-password-file {{ vault_password_file_abs }}
+  register: vault_plain
+  changed_when: false
+  no_log: true
+
+- name: Build vault YAML string (encrypted)
+  when: (vault_mode.stdout | trim) == "encrypted"
+  ansible.builtin.set_fact:
+    vault_yaml_str: "{{ vault_plain.stdout | default('') }}"
+  no_log: true
+
+- name: Read plaintext vault
+  when: (vault_mode.stdout | trim) == "plaintext"
+  ansible.builtin.slurp:
+    path: "{{ vault_file_abs }}"
+  register: vault_plaintext
+  changed_when: false
+
+- name: Build vault YAML string (plaintext)
+  when: (vault_mode.stdout | trim) == "plaintext"
+  ansible.builtin.set_fact:
+    vault_yaml_str: "{{ (vault_plaintext.content | default('')) | b64decode }}"
+  no_log: true
+
+- name: Parse YAML to var 'vault_data'
+  ansible.builtin.set_fact:
+    vault_data: "{{ (vault_yaml_str | default('')) | from_yaml | default({}, true) }}"
+  no_log: true
+
+- name: Validate vault_data mapping
+  ansible.builtin.assert:
+    that: vault_data is mapping
+    fail_msg: "vault_data doit être un mapping YAML. Vérifie la syntaxe de {{ vault_file_abs }}."

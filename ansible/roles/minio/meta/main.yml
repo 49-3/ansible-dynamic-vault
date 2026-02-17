@@ -1,0 +1,14 @@
+#SPDX-License-Identifier: MIT
+galaxy_info:
+  author: David Ribeiro
+  description: MinIO deployment with vault integration example
+  company: 42Mulhouse.fr
+  license: MIT
+  min_ansible_version: 2.10
+  galaxy_tags:
+    - storage
+    - minio
+    - s3
+    - vault
+
+dependencies: []

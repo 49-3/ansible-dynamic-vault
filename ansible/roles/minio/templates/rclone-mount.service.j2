@@ -1,0 +1,12 @@
+[Unit]
+Description=Rclone Mount clonezilla bucket
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/rclone mount clonezilla:clonezilla /mnt/clonezilla --config /root/.config/rclone/rclone.conf
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target

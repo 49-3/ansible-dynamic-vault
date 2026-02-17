@@ -1,0 +1,8 @@
+[clonezilla]
+type = s3
+provider = Minio
+access_key_id = {{ minio_clonezilla }}
+secret_access_key = {{ vault_data.vault_minio_clonezilla_password}}}
+endpoint = http://minio.local:{{ minio_server_port}}
+location_constraint =
+region = eu-west-1

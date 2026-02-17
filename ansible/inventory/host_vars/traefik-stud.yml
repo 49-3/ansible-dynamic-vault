@@ -1,0 +1,8 @@
+---
+# Configuration spécifique pour traefik-stud
+# Override les namespaces par défaut si besoin
+traefik_namespaces:
+  - kube-system
+  - hubble-ui
+  - longhorn-system
+  - argocd

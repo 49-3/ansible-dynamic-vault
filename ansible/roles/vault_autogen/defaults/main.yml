@@ -1,0 +1,4 @@
+# ansible/roles/vault_autogen/defaults/main.yml
+vault_autogen_spec: []
+vault_autogen_default_length: 64
+vault_autogen_charset: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789#!."

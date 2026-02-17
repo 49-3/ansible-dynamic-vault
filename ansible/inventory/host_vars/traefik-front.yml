@@ -1,0 +1,7 @@
+---
+# Configuration spécifique pour traefik-front
+# Override les namespaces par défaut si besoin
+traefik_namespaces:
+  - kube-system
+  - longhorn-system
+  - argocd

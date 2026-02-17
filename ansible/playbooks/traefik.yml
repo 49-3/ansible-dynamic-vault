@@ -1,0 +1,142 @@
+---
+- name: Deploy Trafiks with local vault pipeline (single play)
+  hosts: traefiks
+  become: true
+  gather_facts: true
+
+  vars:
+     vault_lock_dir: "{{ lookup('env','XDG_RUNTIME_DIR') | default(lookup('env','HOME') ~ '/.cache/ansible/locks', true) }}"
+
+  pre_tasks:
+    - name: Prepare vault on controller (load → autogen → mutate)
+      block:
+        - include_role: { name: vault_loader }
+        - include_role: { name: vault_autogen }
+        - include_role: { name: vault_mutator }
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Construire la liste des cibles Traefik
+      vars:
+        target_info:
+          inventory_hostname: "{{ item }}"
+          cluster: "{{ hostvars[item].traefik_cluster | mandatory('traefik_cluster manquant pour ' ~ item) }}"
+      ansible.builtin.set_fact:
+        traefik_targets: "{{ (traefik_targets | default([])) + [ target_info ] }}"
+      loop: "{{ groups['traefiks'] | default([]) }}"
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Récupérer les secrets Traefik depuis Kubernetes
+      ansible.builtin.command: >-
+        kubectl --context {{ item.cluster }}
+        get secret traefik-external-token
+        -n kube-system
+        -o json
+      loop: "{{ traefik_targets | default([]) }}"
+      register: traefik_secret_cmds
+      changed_when: false
+      failed_when: false
+      delegate_to: localhost
+      run_once: true
+      become: false
+      no_log: true
+
+    - name: Initialiser les dictionnaires Traefik
+      ansible.builtin.set_fact:
+        traefik_tokens: "{{ traefik_tokens | default({}) }}"
+        traefik_cas: "{{ traefik_cas | default({}) }}"
+      delegate_to: localhost
+      run_once: true
+      become: false
+      no_log: true
+
+    - name: Construire les dictionnaires Traefik (succès uniquement)
+      ansible.builtin.set_fact:
+        traefik_tokens: >-
+          {{ (traefik_tokens | default({})) | combine({
+               item.item.inventory_hostname:
+                 (((item.stdout | from_json).data.token) | b64decode | regex_replace('\r', '') | trim)
+             }) }}
+        traefik_cas: >-
+          {{ (traefik_cas | default({})) | combine({
+               item.item.inventory_hostname:
+                 (((item.stdout | from_json).data['ca.crt']) | b64decode | regex_replace('\r', '') | trim)
+             }) }}
+      loop: "{{ traefik_secret_cmds.results | default([]) }}"
+      when:
+        - traefik_secret_cmds is defined
+        - item.rc == 0
+        - item.stdout | length > 0
+      delegate_to: localhost
+      run_once: true
+      become: false
+      no_log: true
+
+    - name: Ajouter des entrées vides pour les clusters inaccessibles
+      ansible.builtin.set_fact:
+        traefik_tokens: >-
+          {{ (traefik_tokens | default({})) | combine({
+               item.item.inventory_hostname: ''
+             }) }}
+        traefik_cas: >-
+          {{ (traefik_cas | default({})) | combine({
+               item.item.inventory_hostname: ''
+             }) }}
+      loop: "{{ traefik_secret_cmds.results | default([]) }}"
+      when:
+        - traefik_secret_cmds is defined
+        - item.rc != 0 or (item.stdout | default('') | length == 0)
+      delegate_to: localhost
+      run_once: true
+      become: false
+      no_log: true
+
+    - name: Injecter les valeurs Traefik dans vault_data
+      ansible.builtin.set_fact:
+        vault_data: "{{ (vault_data | default({})) | combine({
+          'vault_traefik_tokens': traefik_tokens,
+          'vault_traefik_cas': traefik_cas}, recursive=True) }}"
+        vault_data_changed: true
+      delegate_to: localhost
+      run_once: true
+      become: false
+      no_log: true
+
+    - name: Persist updated vault_data back to file (controller)
+      when:
+        - vault_data_changed | default(false)
+        - (vault_data | default({})) | length > 0
+      block:
+        - include_role:
+            name: vault_mutator
+          vars:
+            vault_write_map: "{{ hostvars[inventory_hostname].vault_data }}"
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+  roles:
+    - traefik
+
+  post_tasks:
+    - name: Persist updated vault_data back to file (controller)
+      when:
+        - vault_data_changed | default(false)
+        - (vault_data | default({})) | length > 0
+      block:
+        - include_role:
+            name: vault_mutator
+          vars:
+            vault_write_map: "{{ hostvars[inventory_hostname].vault_data }}"
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Nettoyer les variables sensibles de la mémoire
+      ansible.builtin.set_fact:
+        vault_data: {}
+      run_once: true
+      no_log: true

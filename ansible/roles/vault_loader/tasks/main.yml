@@ -53,7 +53,7 @@
 # défaut: XDG_RUNTIME_DIR sinon ~/.cache/ansible/locks
 - name: Compute default user lock dir
   ansible.builtin.set_fact:
-    _default_lock_dir: "{{ lookup('env','XDG_RUNTIME_DIR') | default(ansible_env.HOME ~ '/.cache/ansible/locks', true) }}"
+    _default_lock_dir: "{{ lookup('env','XDG_RUNTIME_DIR') | default(lookup('env','HOME') ~ '/.cache/ansible/locks', true) }}"
   run_once: true
 
 - name: Ensure lock dir exists (user)

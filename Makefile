@@ -45,13 +45,13 @@ commit: vault_encrypt ## Commit les changements avec le message fourni dans la v
 	if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then git push; else git push -u origin "$$branch"; fi
 
 .PHONY: vault_mutator_autogen_test
-vault_mutator_autogen_test: ## Test complet du vault (loader → autogen → mutator)
+vault_mutator_autogen_test: vault_encrypt ## Test complet du vault (loader → autogen → mutator)
 	@$(VAULT_ENV) ANSIBLE_ROLES_PATH=ansible/roles ansible-playbook ansible/playbooks/vault_mutator_autogen_test.yml
 
 .PHONY: deploy_minio
-deploy_minio: ## Déploie MinIO (exemple d'utilisation du vault)
+deploy_minio: vault_encrypt ## Déploie MinIO (exemple d'utilisation du vault)
 	@$(VAULT_ENV) ansible-playbook ansible/playbooks/minio.yml
 
 .PHONY: deploy_traefik
-deploy_traefik: ## Déploie Traefik (exemple d'utilisation du vault)
+deploy_traefik: vault_encrypt ## Déploie Traefik (exemple d'utilisation du vault)
 	@$(VAULT_ENV) ansible-playbook ansible/playbooks/traefik.yml

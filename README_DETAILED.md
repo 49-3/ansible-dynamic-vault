@@ -62,15 +62,15 @@ vault_mutator
   vars:
     vault_autogen_spec:
       - { kind: scalar, path: "app_password", generate: "password" }
-  
+
   pre_tasks:
     - include_role: { name: vault_loader }       # Load/init vault
     - include_role: { name: vault_autogen }      # Generate missing secrets
-  
+
   tasks:
     - name: Deploy app with secrets
       # vault_data.app_password disponible ici
-  
+
   post_tasks:
     - include_role: { name: vault_mutator }      # Persist mutations
 ```
@@ -501,18 +501,18 @@ make vault_mutator_autogen_test
       - { kind: scalar, path: "db_password", generate: "password", length: 32 }
       - { kind: scalar, path: "api_key", generate: "password", length: 48, chars: "ascii_letters,digits" }
       - { kind: scalar, path: "admin_user", default: "admin" }
-  
+
   pre_tasks:
     - include_role: { name: vault_loader }
     - include_role: { name: vault_autogen }
-  
+
   tasks:
     - name: Output generated secrets (demo only)
       debug:
         msg:
           db_password: "{{ vault_data.db_password | regex_replace('.*', '<hidden>') }}"
           api_key: "{{ vault_data.api_key | regex_replace('.*', '<hidden>') }}"
-  
+
   post_tasks:
     - include_role: { name: vault_mutator }
 ```
@@ -550,21 +550,21 @@ database_users:
     # 1. Charger vault
     - include_role: { name: vault_loader }
     - include_role: { name: vault_autogen }
-    
+
     # 2. Récupérer secrets depuis K8s
     - name: Get Traefik token from K8s
       shell: kubectl get secret traefik-token -o json | jq -r '.data.token | @base64d'
       register: k8s_traefik_token
-    
+
     # 3. Ajouter à vault_data (en mémoire)
     - name: Inject K8s secret into vault
       set_fact:
         vault_data: "{{ vault_data | combine({'traefik_token_prod': k8s_traefik_token.stdout}) }}"
         vault_data_changed: true
-  
+
   tasks:
     - include_role: { name: traefik }
-  
+
   post_tasks:
     # 4. Persister mutations (traefik_token_prod)
     - include_role: { name: vault_mutator }
@@ -600,22 +600,22 @@ vault_autogen_spec:
       - { kind: scalar, path: "vault_minio_root_password", generate: "password" }
       - { kind: scalar, path: "vault_minio_longhorn_back_password", generate: "password" }
       # ... 8 autres passwords ...
-  
+
   pre_tasks:
     - include_role: { name: vault_loader }
     - include_role: { name: vault_autogen }
     - include_role: { name: vault_mutator }
-  
+
   roles:
     - minio  # Déploiement MinIO (utilise vault_data)
-  
+
   post_tasks:
     # Générer dynamiquement un API token post-déploiement
     - name: Generate API token after MinIO is up
       set_fact:
         vault_data: "{{ vault_data | combine({'minio_api_token': lookup('password', '/dev/null', length=48)}) }}"
         vault_data_changed: true
-    
+
     # Re-persister avec le nouveau token
     - include_role: { name: vault_mutator }
       when: vault_data_changed | default(false)
@@ -636,13 +636,13 @@ vault_autogen_spec:
   pre_tasks:
     - include_role: { name: vault_loader }
     - include_role: { name: vault_autogen }
-    
+
     # Récupérer tokens depuis K8s clusters
     - name: Get Traefik external token from each cluster
       command: kubectl --context {{ item }} get secret traefik-external-token -n kube-system -o json
       loop: "{{ traefik_clusters }}"
       register: k8s_tokens
-    
+
     # Parser et injecter dans vault_data
     - name: Build tokens dict from K8s responses
       set_fact:
@@ -652,16 +652,16 @@ vault_autogen_spec:
              }) }}
       loop: "{{ k8s_tokens.results }}"
       when: item.rc == 0
-    
+
     # Fusionner dans vault
     - name: Inject K8s tokens into vault
       set_fact:
         vault_data: "{{ vault_data | combine({'traefik_tokens_prod': traefik_tokens}) }}"
         vault_data_changed: true
-  
+
   roles:
     - traefik  # Config Traefik avec tokens
-  
+
   post_tasks:
     # Persister la fusion K8s + vault_autogen
     - include_role: { name: vault_mutator }

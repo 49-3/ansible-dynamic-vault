@@ -13,7 +13,7 @@ Dynamic generation, external fusion, and atomic persistence — without external
 
 ## 🚀 Why This Project Exists
 
-Native Ansible Vault encrypts secrets but does not manage their lifecycle.
+Native Ansible Vault encrypts secrets, but it does not manage their lifecycle.
 
 This project adds:
 

@@ -59,7 +59,7 @@ Persists the updated vault atomically and safely.
 ansible-playbook ansible/playbooks/vault_mutator_autogen_test.yml
 ```
 
-Generates secrets defined in the specification if absent from the vault.
+Generates any secrets defined in the specification that are missing from the vault.
 
 ---
 

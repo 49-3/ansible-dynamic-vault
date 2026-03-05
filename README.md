@@ -122,7 +122,7 @@ Declarative secret specification enables idempotent generation.
 
 ## 🤝 Contributing
 
-See CONTRIBUTING.md
+See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 

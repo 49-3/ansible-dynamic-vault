@@ -1,6 +1,6 @@
 # 🔐 Ansible Dynamic Vault
 
-![TAnsible Dynamic Vault](ansible_dynamic_vault.png)
+![Ansible Dynamic Vault](ansible_dynamic_vault.png)
 
 ⭐ **Recruiter? Start here → [RECRUITER_README.md](RECRUITER_README.md)**
 

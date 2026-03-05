@@ -44,7 +44,7 @@ Three composable roles:
 Decrypts and loads the vault into memory.
 
 ### vault_autogen
-Generates missing secrets from declarative spec.
+Generates missing secrets from a declarative spec.
 
 ### vault_mutator
 Persists the updated vault atomically and safely.

@@ -1,19 +1,19 @@
 # 🔐 Ansible Dynamic Vault
 
-![TAnsible Dynamic Vault](anvible_dynamic_vault.png)
+![Ansible Dynamic Vault](ansible_dynamic_vault.png)
 
 ⭐ **Recruiter? Start here → [RECRUITER_README.md](RECRUITER_README.md)**
 
 📚 **Detailed usage examples → [README_DETAILED.md](README_DETAILED.md)**
 
 Production-grade secret lifecycle automation for Ansible Vault.
-Dynamic generation, external fusion, and atomic persistence — without external secret managers.
+Dynamic generation, external secret integration, and atomic persistence — without external secret managers.
 
 ---
 
 ## 🚀 Why This Project Exists
 
-Native Ansible Vault encrypts secrets but does not manage their lifecycle.
+Native Ansible Vault encrypts secrets, but it does not manage their lifecycle.
 
 This project adds:
 
@@ -40,14 +40,14 @@ This project adds:
 
 Three composable roles:
 
-  ### vault_loader
-   Decrypts and loads vault into memory.
+### vault_loader
+Decrypts and loads the vault into memory.
 
-  ### vault_autogen
-   Generates missing secrets from declarative spec.
+### vault_autogen
+Generates missing secrets from a declarative spec.
 
-  ### vault_mutator
-   Persists updated vault atomically and safely.
+### vault_mutator
+Persists the updated vault atomically and safely.
 
 ---
 
@@ -59,7 +59,7 @@ Three composable roles:
 ansible-playbook ansible/playbooks/vault_mutator_autogen_test.yml
 ```
 
-Generates secrets defined in the specification if absent from the vault.
+Generates any secrets defined in the specification that are missing from the vault.
 
 ---
 
@@ -122,10 +122,10 @@ Declarative secret specification enables idempotent generation.
 
 ## 🤝 Contributing
 
-See CONTRIBUTING.md
+See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 
 ## 📜 License
 
-MIT
+See [LICENSE](LICENSE)

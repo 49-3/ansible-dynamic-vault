@@ -7,7 +7,7 @@
 📚 **Detailed usage examples → [README_DETAILED.md](README_DETAILED.md)**
 
 Production-grade secret lifecycle automation for Ansible Vault.
-Dynamic generation, external fusion, and atomic persistence — without external secret managers.
+Dynamic generation, external secret integration, and atomic persistence — without external secret managers.
 
 ---
 

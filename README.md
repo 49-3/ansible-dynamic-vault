@@ -40,14 +40,14 @@ This project adds:
 
 Three composable roles:
 
-  ### vault_loader
-   Decrypts and loads vault into memory.
+### vault_loader
+Decrypts and loads the vault into memory.
 
-  ### vault_autogen
-   Generates missing secrets from declarative spec.
+### vault_autogen
+Generates missing secrets from declarative spec.
 
-  ### vault_mutator
-   Persists updated vault atomically and safely.
+### vault_mutator
+Persists the updated vault atomically and safely.
 
 ---
 
